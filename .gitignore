@@ -82,6 +82,6 @@ fabric.properties
 
 data/
 mflix.iml
-pom.xml
-src/
+
+
 target/
