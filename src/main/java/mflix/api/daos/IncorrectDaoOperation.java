@@ -6,22 +6,22 @@ package mflix.api.daos;
  */
 public class IncorrectDaoOperation extends RuntimeException {
 
-  /**
-   * Creates a exception for incorrect Dao layer operations.
-   *
-   * @param message - inflicting string message that originated the error.
-   * @param exception - exception chain reference.
-   */
-  public IncorrectDaoOperation(final String message, Throwable exception) {
-    super(message, exception);
-  }
+    /**
+     * Creates a exception for incorrect Dao layer operations.
+     *
+     * @param message   - inflicting string message that originated the error.
+     * @param exception - exception chain reference.
+     */
+    public IncorrectDaoOperation(final String message, Throwable exception) {
+        super(message, exception);
+    }
 
-  /**
-   * Creates a exception for incorrect Dao layer operations.
-   *
-   * @param message - inflicting string message that originated the error.
-   */
-  public IncorrectDaoOperation(final String message) {
-    super(message);
-  }
+    /**
+     * Creates a exception for incorrect Dao layer operations.
+     *
+     * @param message - inflicting string message that originated the error.
+     */
+    public IncorrectDaoOperation(final String message) {
+        super(message);
+    }
 }
