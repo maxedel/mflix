@@ -36,8 +36,20 @@ public class MovieDao extends AbstractMFlixDao {
 
     @SuppressWarnings("unchecked")
     private Bson buildLookupStage() {
-        return null;
+        List<Variable<String>> let = new ArrayList<>();
+        let.add(new Variable<String>("id", "$_id"));
 
+        // lookup pipeline
+        Bson exprMatch = Document.parse("{'$expr': {'$eq': ['$movie_id', '$$id']}}");
+
+        Bson lookupMatch = Aggregates.match(exprMatch);
+        List<Bson> lookUpPipeline = new ArrayList<>();
+        // lookup sort stage
+        Bson sortLookup = Aggregates.sort(Sorts.descending("date"));
+
+        lookUpPipeline.add(lookupMatch);
+        lookUpPipeline.add(sortLookup);
+        return Aggregates.lookup("comments", let, lookUpPipeline, "comments");
     }
 
     /**
@@ -65,19 +77,20 @@ public class MovieDao extends AbstractMFlixDao {
         if (!validIdValue(movieId)) {
             return null;
         }
-
         List<Bson> pipeline = new ArrayList<>();
         // match stage to find movie
         Bson match = Aggregates.match(Filters.eq("_id", new ObjectId(movieId)));
-        Bson lookup = lookup("comments", "_id", "movie_id", "comments");
-        Bson sortLookup = sort(Sorts.descending("date"));
         pipeline.add(match);
-        pipeline.add(lookup);
-        pipeline.add(sortLookup);
-        // TODO> Ticket: Get Comments - implement the lookup stage that allows the comments to
-        // retrieved with Movies.
-        Document movie = moviesCollection.aggregate(pipeline).first();
 
+        // comments lookup stage
+        Bson lookup = buildLookupStage();
+        if (lookup != null) {
+            pipeline.add(lookup);
+        }
+
+        Document movie = moviesCollection.aggregate(pipeline)
+                .batchSize(1)
+                .iterator().tryNext();
         return movie;
     }
 
