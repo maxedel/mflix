@@ -102,18 +102,24 @@ public class CommentDao extends AbstractMFlixDao {
      * @return true if successfully updates the comment text.
      */
     public boolean updateComment(String commentId, String text, String email) {
+        Bson filter = Filters.and(
+                Filters.eq("email", email),
+                Filters.eq("_id", new ObjectId(commentId)));
+        Bson update = Updates.combine(Updates.set("text", text),
+                Updates.set("date", new Date()));
+        UpdateResult res = commentCollection.updateOne(filter, update);
 
-        // TODO> Ticket - Update User reviews: implement the functionality that enables updating an
-        // user own comments
-        Bson filter = eq("_id", new ObjectId(commentId));
-        Comment comment = commentCollection.find(filter).first();
-        if (comment != null && !comment.getEmail().equalsIgnoreCase(email)) return false;
-        Bson setUpdate = Updates.set("text", text);
-        UpdateOptions options = new UpdateOptions().upsert(true);
-        commentCollection.updateOne(filter, setUpdate, options);
-        // TODO> Ticket - Handling Errors: Implement a try catch block to
-        // handle a potential write exception when given a wrong commentId.
-        return true;
+        if (res.getMatchedCount() > 0) {
+
+            if (res.getModifiedCount() != 1) {
+                log.warn("Comment `{}` text was not updated. Is it the same text?");
+            }
+
+            return true;
+        }
+        log.error("Could not update comment `{}`. Make sure the comment is owned by `{}`",
+                commentId, email);
+        return false;
     }
 
     /**
@@ -133,7 +139,7 @@ public class CommentDao extends AbstractMFlixDao {
         DeleteResult res = commentCollection.deleteOne(filter);
         // in case the delete count is different than one the document
         // either does not exist or it does not match the email + _id filter.
-        if (res.getDeletedCount()!=1){
+        if (res.getDeletedCount() != 1) {
             log.warn("Not able to delete comment `{}` for user `{}`. User" +
                             " does not own comment or already deleted!",
                     commentId, email);
@@ -157,6 +163,39 @@ public class CommentDao extends AbstractMFlixDao {
         // // guarantee for the returned documents. Once a commenter is in the
         // // top 20 of users, they become a Critic, so mostActive is composed of
         // // Critic objects.
+        List<Bson> pipeline = new ArrayList<>();
+
+        String groupIdCast = "$email";
+        BsonField sum = Accumulators.sum("count", 1);
+
+        Bson groupStage = Aggregates.group(groupIdCast, sum);
+
+        Bson sortOrder = Sorts.descending("count");
+        Bson sortStage = Aggregates.sort(sortOrder);
+
+        Bson limitStage = Aggregates.limit(20);
+
+        pipeline.add(groupStage);
+        pipeline.add(sortStage);
+        pipeline.add(limitStage);
+
+        // We cannot use the CommentDao class `commentCollection` object
+        // since this returns Comment objects.
+        // We need to create a new collection instance that returns
+        // Critic objects instead.
+        // Given that this report is required to be accurate and
+        // reliable, we want to guarantee a high level of durability, by
+        // ensuring that the majority of nodes in our Replica Set
+        // acknowledged all documents for this query. Therefore we will be
+        // setting our ReadConcern to "majority"
+        // https://docs.mongodb.com/manual/reference/method/cursor.readConcern/
+        MongoCollection<Critic> commentCriticCollection =
+                this.db.getCollection("comments", Critic.class)
+                        .withCodecRegistry(this.pojoCodecRegistry)
+                        .withReadConcern(ReadConcern.MAJORITY);
+
+        commentCriticCollection.aggregate(pipeline).into(mostActive);
+
         return mostActive;
     }
 }
